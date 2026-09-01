@@ -1,0 +1,72 @@
+:root {
+  /* Color: dispatch-board palette. Near-black charcoal panels, warm paper-white
+     text, a single high-vis rescue-orange for action, steel-blue for calm
+     secondary info, and alert-red reserved ONLY for an active-deployment state. */
+  --bg: #14171a;
+  --bg-panel: #1c2024;
+  --bg-panel-raised: #22262b;
+  --line: #2d3339;
+  --text: #edece6;
+  --text-dim: #9aa1a8;
+  --accent: #ff6a1f;
+  --accent-dim: #b6511c;
+  --steel: #5c86a8;
+  --alert: #c1272d;
+  --ok: #4f9a5a;
+
+  --font-display: "Barlow Condensed", sans-serif;
+  --font-body: "Inter", sans-serif;
+
+  --content-max: 1180px;
+  --radius: 3px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1.05;
+  margin: 0;
+}
+
+p {
+  line-height: 1.6;
+  color: var(--text-dim);
+  max-width: 62ch;
+}
+
+button {
+  font-family: var(--font-body);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
