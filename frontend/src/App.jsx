@@ -13,6 +13,11 @@ import ProtectedRoute from "./admin/ProtectedRoute.jsx";
 import Login from "./admin/pages/Login.jsx";
 import MembersList from "./admin/pages/MembersList.jsx";
 import MemberForm from "./admin/pages/MemberForm.jsx";
+import ApplicantsList from "./admin/pages/ApplicantsList.jsx";
+import ApplicantsDetail from "./admin/pages/ApplicantsDetail.jsx";
+import ApplicantsKanban from "./admin/pages/ApplicantsKanban.jsx";
+import ResourceList from "./admin/components/ResourceList.jsx";
+import ResourceForm from "./admin/components/ResourceForm.jsx";
 
 export default function App() {
   const location = useLocation();
@@ -53,6 +58,56 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <MemberForm />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/archive"
+            element={
+              <ProtectedRoute>
+                <ApplicantsList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/pipeline"
+            element={
+              <ProtectedRoute>
+                <ApplicantsKanban />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/archive/:id"
+            element={
+              <ProtectedRoute>
+                <ApplicantsDetail />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/content/:resource"
+            element={
+              <ProtectedRoute>
+                <ResourceList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/content/:resource/new"
+            element={
+              <ProtectedRoute>
+                <ResourceForm />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/content/:resource/:id"
+            element={
+              <ProtectedRoute>
+                <ResourceForm />
               </ProtectedRoute>
             }
           />

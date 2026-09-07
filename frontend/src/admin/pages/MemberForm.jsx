@@ -7,6 +7,9 @@ const EMPTY_FORM = {
   full_name: "",
   email: "",
   phone: "",
+  id_number: "",
+  country: "",
+  blood_type: "",
   role: "",
   status: "probation",
   joined_date: "",
@@ -20,6 +23,7 @@ export default function MemberForm() {
   const navigate = useNavigate();
 
   const [roles, setRoles] = useState([]);
+  const [countries, setCountries] = useState([]);
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(isEditing);
   const [saving, setSaving] = useState(false);
@@ -27,6 +31,7 @@ export default function MemberForm() {
 
   useEffect(() => {
     adminEndpoints.teamRoles().then(setRoles);
+    adminEndpoints.listCountries().then((list) => setCountries(Array.isArray(list) ? list : []));
   }, []);
 
   useEffect(() => {
@@ -38,6 +43,9 @@ export default function MemberForm() {
           full_name: data.full_name,
           email: data.email,
           phone: data.phone || "",
+          id_number: data.id_number || "",
+          country: data.country || "",
+          blood_type: data.blood_type || "",
           role: data.role || "",
           status: data.status,
           joined_date: data.joined_date,
@@ -57,7 +65,7 @@ export default function MemberForm() {
     e.preventDefault();
     setSaving(true);
     setError(null);
-    const payload = { ...form, role: form.role || null };
+    const payload = { ...form, role: form.role || null, country: form.country || null };
     try {
       if (isEditing) {
         await adminEndpoints.updateMember(id, payload);
@@ -104,6 +112,35 @@ export default function MemberForm() {
           <div className="field">
             <label htmlFor="phone">Phone</label>
             <input id="phone" name="phone" value={form.phone} onChange={handleChange} />
+          </div>
+          <div className="field">
+            <label htmlFor="id_number">ID number</label>
+            <input id="id_number" name="id_number" value={form.id_number} onChange={handleChange} />
+          </div>
+          <div className="field">
+            <label htmlFor="country">Country</label>
+            <select id="country" name="country" value={form.country} onChange={handleChange}>
+              <option value="">—</option>
+              {countries.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="blood_type">Blood type</label>
+            <select id="blood_type" name="blood_type" value={form.blood_type} onChange={handleChange}>
+              <option value="">—</option>
+              <option value="A+">A+</option>
+              <option value="A-">A-</option>
+              <option value="B+">B+</option>
+              <option value="B-">B-</option>
+              <option value="AB+">AB+</option>
+              <option value="AB-">AB-</option>
+              <option value="O+">O+</option>
+              <option value="O-">O-</option>
+            </select>
           </div>
           <div className="field">
             <label htmlFor="joined_date">Joined date</label>

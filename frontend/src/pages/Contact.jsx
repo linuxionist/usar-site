@@ -1,8 +1,10 @@
 import { useState } from "react";
 import PageHero from "../components/PageHero.jsx";
 import { endpoints } from "../api/client.js";
+import { useLanguage } from "../i18n/LanguageContext.jsx";
 
 export default function Contact() {
+  const { t } = useLanguage();
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -37,26 +39,23 @@ export default function Contact() {
   return (
     <>
       <PageHero
-        eyebrow="Contact &amp; Emergency Info"
-        title="Reach the right desk, whether it's dispatch or a general question."
+        eyebrow={t("contact.hero.eyebrow")}
+        title={t("contact.hero.title")}
       />
 
       <section className="section">
         <div className="container two-col">
           <div>
-            <h2 style={{ marginBottom: 14 }}>24/7 Activation Hotline</h2>
-            <p>
-              Emergency management agencies and dispatch centers requesting task force
-              deployment should call the activation line directly:
-            </p>
+            <h2 style={{ marginBottom: 14 }}>{t("contact.hotline.title")}</h2>
+            <p>{t("contact.hotline.body")}</p>
             <p style={{ color: "var(--accent)", fontFamily: "var(--font-display)", fontSize: "1.4rem" }}>
               (555) 019-4477
             </p>
           </div>
           <div>
-            <h2 style={{ marginBottom: 14 }}>HQ &amp; Training Facility</h2>
-            <p>412 Ridgeline Way, your city — visitors must check in at the main gate.</p>
-            <p>Media inquiries: press@ridgelinetaskforce.org</p>
+            <h2 style={{ marginBottom: 14 }}>{t("contact.hq.title")}</h2>
+            <p>{t("contact.hq.address")}</p>
+            <p>{t("contact.hq.media")}</p>
           </div>
         </div>
       </section>
@@ -64,15 +63,15 @@ export default function Contact() {
       <section className="section" style={{ borderBottom: "none" }}>
         <div className="container">
           <div className="section-head">
-            <h2>General Inquiries</h2>
+            <h2>{t("contact.inquiries.title")}</h2>
           </div>
           <form className="form-grid" onSubmit={handleSubmit}>
             <div className="field">
-              <label htmlFor="name">Name</label>
+              <label htmlFor="name">{t("contact.form.name")}</label>
               <input id="name" name="name" required value={form.name} onChange={handleChange} />
             </div>
             <div className="field">
-              <label htmlFor="email">Email</label>
+              <label htmlFor="email">{t("contact.form.email")}</label>
               <input
                 id="email"
                 type="email"
@@ -83,15 +82,15 @@ export default function Contact() {
               />
             </div>
             <div className="field">
-              <label htmlFor="phone">Phone (optional)</label>
+              <label htmlFor="phone">{t("contact.form.phone")}</label>
               <input id="phone" name="phone" value={form.phone} onChange={handleChange} />
             </div>
             <div className="field">
-              <label htmlFor="subject">Subject</label>
+              <label htmlFor="subject">{t("contact.form.subject")}</label>
               <input id="subject" name="subject" value={form.subject} onChange={handleChange} />
             </div>
             <div className="field full">
-              <label htmlFor="message">Message</label>
+              <label htmlFor="message">{t("contact.form.message")}</label>
               <textarea
                 id="message"
                 name="message"
@@ -110,20 +109,18 @@ export default function Contact() {
                 style={{ width: "auto" }}
               />
               <label htmlFor="is_media_inquiry" style={{ margin: 0 }}>
-                This is a media inquiry
+                {t("contact.form.media")}
               </label>
             </div>
             <div className="full">
               <button type="submit" className="btn btn-primary" disabled={submitting}>
-                {submitting ? "Sending…" : "Send Message"}
+                {submitting ? t("contact.form.sending") : t("contact.form.send")}
               </button>
               {status === "success" && (
-                <p className="form-status success">Message sent. We'll be in touch shortly.</p>
+                <p className="form-status success">{t("contact.form.success")}</p>
               )}
               {status === "error" && (
-                <p className="form-status error">
-                  Something went wrong sending your message. Please try again.
-                </p>
+                <p className="form-status error">{t("contact.form.error")}</p>
               )}
             </div>
           </form>
