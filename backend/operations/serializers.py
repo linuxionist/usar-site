@@ -1,4 +1,5 @@
 import os
+import re
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import serializers
 from . import models
@@ -11,21 +12,10 @@ ES_CHOICE_LABELS = {
         models.TeamStatus.TRAINING: "Capacitación en Progreso",
         models.TeamStatus.DEPLOYED: "Despliegue Activo",
     },
-    "Capability.category": {
-        "heavy_technical": "Rescate Pesado/Técnico",
-        "k9": "Unidad Canina (K9)",
-        "technical_search": "Búsqueda Técnica",
-        "medical": "Grupo Médico de Tarea",
-        "hazmat": "Materiales Peligrosos y Soporte Técnico",
-    },
     "NewsUpdate.category": {
         "news": "Actualización del Equipo",
         "dispatch": "Registro de Despacho",
         "exercise": "Ejercicio de Capacitación",
-    },
-    "Deployment.status": {
-        "active": "Operación Activa",
-        "completed": "Completado",
     },
     "Partner.partner_type": {
         "agency": "Agencia Patrocinadora",
@@ -33,6 +23,40 @@ ES_CHOICE_LABELS = {
         "ngo": "ONG / Socio Sin Fines de Lucro",
     },
 }
+
+
+class LookupKeyField(serializers.Field):
+    """Represents a relationship to a lookup table by its key string.
+
+    Reads as the lookup row's ``status`` key (e.g. "active", "A+") so existing
+    frontend comparisons/filters keep working; writes accept either that key
+    or the numeric id. Used for Member.status, Member.blood_type,
+    Deployment.status and Capability.category.
+    """
+
+    default_error_messages = {"invalid": "Invalid lookup value."}
+
+    def __init__(self, lookup_model, *args, **kwargs):
+        self.lookup_model = lookup_model
+        if "allow_null" not in kwargs:
+            kwargs["allow_null"] = True
+        super().__init__(*args, **kwargs)
+
+    def to_representation(self, value):
+        if value is None:
+            return None
+        return value.status
+
+    def to_internal_value(self, data):
+        if data in (None, ""):
+            return None
+        try:
+            return self.lookup_model.objects.get(status=data)
+        except (self.lookup_model.DoesNotExist, ValueError, TypeError):
+            try:
+                return self.lookup_model.objects.get(pk=data)
+            except (self.lookup_model.DoesNotExist, ValueError, TypeError):
+                self.fail("invalid")
 
 
 class TranslatedFieldsMixin:
@@ -78,6 +102,27 @@ def translated_list_method(attr):
     return getter
 
 
+def _lookup_label(lookup, lang):
+    """Translated title for a lookup-table row (status/note/note_es triples)."""
+    if lookup is None:
+        return ""
+    if lang == "es" and lookup.note_es:
+        return lookup.note_es
+    return lookup.note or lookup.status
+
+
+class LookupSerializer(serializers.ModelSerializer, TranslatedFieldsMixin):
+    """Base for the four lookup tables; exposes a translated label."""
+
+    label = serializers.SerializerMethodField()
+
+    def get_label(self, obj):
+        lang = self._get_lang()
+        if lang == "es" and obj.note_es:
+            return obj.note_es
+        return obj.note or obj.status
+
+
 class TeamStatusSerializer(serializers.ModelSerializer, TranslatedFieldsMixin):
     status_display = serializers.SerializerMethodField()
     note = serializers.SerializerMethodField()
@@ -108,11 +153,13 @@ class CapabilitySerializer(serializers.ModelSerializer, TranslatedFieldsMixin):
     description = serializers.SerializerMethodField()
     category_display = serializers.SerializerMethodField()
 
+    category = LookupKeyField(models.CapabilityCategory, required=False)
+
     class Meta:
         model = models.Capability
         fields = [
             "id", "category", "category_display", "title", "title_es", "summary",
-            "summary_es", "description", "description_es", "icon", "order",
+            "summary_es", "description", "description_es", "order",
         ]
 
     get_title = translated_method("title")
@@ -120,7 +167,7 @@ class CapabilitySerializer(serializers.ModelSerializer, TranslatedFieldsMixin):
     get_description = translated_method("description")
 
     def get_category_display(self, obj):
-        return self._get_choice_display(obj, "category", models.Capability.CATEGORY_CHOICES)
+        return _lookup_label(obj.category, self._get_lang())
 
 
 class NewsUpdateSerializer(serializers.ModelSerializer, TranslatedFieldsMixin):
@@ -150,11 +197,13 @@ class DeploymentSerializer(serializers.ModelSerializer, TranslatedFieldsMixin):
     summary = serializers.SerializerMethodField()
     status_display = serializers.SerializerMethodField()
 
+    status = LookupKeyField(models.DeploymentStatus, required=False)
+
     class Meta:
         model = models.Deployment
         fields = [
             "id", "name", "name_es", "location", "location_es", "status", "status_display",
-            "start_date", "end_date", "summary", "summary_es", "is_public",
+            "start_date", "end_date", "summary", "summary_es", "is_public", "map_area",
         ]
 
     get_name = translated_method("name")
@@ -162,7 +211,7 @@ class DeploymentSerializer(serializers.ModelSerializer, TranslatedFieldsMixin):
     get_summary = translated_method("summary")
 
     def get_status_display(self, obj):
-        return self._get_choice_display(obj, "status", models.Deployment.STATUS_CHOICES)
+        return _lookup_label(obj.status, self._get_lang())
 
 
 class TrainingExerciseSerializer(serializers.ModelSerializer, TranslatedFieldsMixin):
@@ -486,10 +535,13 @@ class SponsorshipTierSerializer(serializers.ModelSerializer, TranslatedFieldsMix
 
 
 class MemberSerializer(serializers.ModelSerializer):
-    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    status = LookupKeyField(models.MemberStatus, required=False)
+    blood_type = LookupKeyField(models.BloodType, required=False)
+    status_display = serializers.SerializerMethodField()
     role_title = serializers.CharField(source="role.title", read_only=True)
     country_name = serializers.CharField(source="country.name", read_only=True, default=None)
     certifications_list = serializers.SerializerMethodField()
+    member_number = serializers.CharField(read_only=True, default="")
 
     class Meta:
         model = models.Member
@@ -497,12 +549,131 @@ class MemberSerializer(serializers.ModelSerializer):
             "id", "full_name", "email", "phone", "role", "role_title",
             "id_number", "country", "country_name", "blood_type",
             "status", "status_display", "joined_date", "certifications",
-            "certifications_list", "photo", "notes", "created_at", "updated_at",
+            "certifications_list", "photo", "notes", "member_number",
+            "created_at", "updated_at",
         ]
         read_only_fields = ["created_at", "updated_at"]
 
+    def get_status_display(self, obj):
+        request = self.context.get("request", None)
+        lang = request.query_params.get("lang", "en") if request else "en"
+        return _lookup_label(obj.status, lang)
+
     def get_certifications_list(self, obj):
         return [line.strip() for line in obj.certifications.splitlines() if line.strip()]
+
+
+class MemberPasswordSerializer(serializers.Serializer):
+    """Staff-only password set for the login account linked to a member.
+
+    The member uses this password (with their username) to sign in to the
+    portal; admins reset it for them whenever it needs to change.
+    """
+
+    new_password = serializers.CharField(write_only=True)
+    confirm_password = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        if attrs.get("new_password") != attrs.get("confirm_password"):
+            raise serializers.ValidationError(
+                {"confirm_password": "The two passwords do not match."}
+            )
+        return attrs
+
+
+class MemberPortalSerializer(serializers.ModelSerializer):
+    """Profile returned to a signed-in member.
+
+    Displays the member's own data for editing; bilingual labels resolve
+    against the active site language. `member_number` is the linked login
+    username (the member's email address by default).
+    """
+
+    member_number = serializers.CharField(read_only=True)
+    country = serializers.PrimaryKeyRelatedField(read_only=True)
+    blood_type = LookupKeyField(models.BloodType, required=False)
+    country_name = serializers.SerializerMethodField()
+    role_title = serializers.SerializerMethodField()
+    status_display = serializers.SerializerMethodField()
+    certifications_list = serializers.SerializerMethodField()
+    joined_date = serializers.DateField(format="%Y-%m-%d")
+
+    class Meta:
+        model = models.Member
+        fields = [
+            "member_number", "full_name", "email", "phone", "id_number",
+            "country", "country_name", "blood_type", "role_title",
+            "status", "status_display", "joined_date", "certifications",
+            "certifications_list", "notes", "photo", "created_at",
+        ]
+
+    def get_country_name(self, obj):
+        country = obj.country
+        if country is None:
+            return None
+        lang = self._get_lang()
+        if lang == "es" and country.name_es:
+            return country.name_es
+        return country.name
+
+    def get_role_title(self, obj):
+        role = obj.role
+        if role is None:
+            return None
+        lang = self._get_lang()
+        if lang == "es" and role.title_es:
+            return role.title_es
+        return role.title
+
+    def get_status_display(self, obj):
+        return _lookup_label(obj.status, self._get_lang())
+
+    def _get_lang(self):
+        request = self.context.get("request", None)
+        return request.query_params.get("lang", "en") if request else "en"
+
+    def get_certifications_list(self, obj):
+        return [line.strip() for line in obj.certifications.splitlines() if line.strip()]
+
+
+class MemberSelfUpdateSerializer(serializers.Serializer):
+    """Writable fields a signed-in member may update on their own profile.
+
+    Everything the roster tracks is editable except joined_date, role and
+    status (those stay staff-controlled). The login `username` and an optional
+    new password live on the linked auth account and are applied alongside.
+    """
+
+    username = serializers.CharField(required=False, allow_blank=False)
+    full_name = serializers.CharField(required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    country = serializers.PrimaryKeyRelatedField(queryset=models.Country.objects.all(), required=False, allow_null=True)
+    blood_type = LookupKeyField(models.BloodType, required=False)
+    phone = serializers.CharField(required=False, allow_blank=True)
+    id_number = serializers.CharField(required=False, allow_blank=True)
+    certifications = serializers.CharField(required=False, allow_blank=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
+    new_password = serializers.CharField(required=False, allow_blank=False, write_only=True)
+    confirm_password = serializers.CharField(required=False, allow_blank=False, write_only=True)
+
+    def validate_username(self, value):
+        value = (value or "").strip().lower()
+        if not value:
+            raise serializers.ValidationError("Username may not be empty.")
+        if not re.fullmatch(r"[\w.@+-]+", value):
+            raise serializers.ValidationError(
+                "Enter a valid username. Letters, digits and @/./+/-/_ only."
+            )
+        return value
+
+    def validate(self, attrs):
+        new_password = attrs.get("new_password")
+        confirm_password = attrs.get("confirm_password")
+        if new_password and new_password != confirm_password:
+            raise serializers.ValidationError(
+                {"confirm_password": "The two passwords do not match."}
+            )
+        return attrs
 
 
 class CommandLeadershipSerializer(serializers.ModelSerializer, TranslatedFieldsMixin):
@@ -514,7 +685,7 @@ class CommandLeadershipSerializer(serializers.ModelSerializer, TranslatedFieldsM
 
     class Meta:
         model = models.Member
-        fields = ["id", "name", "role_title", "hierarchy_name", "joined_date"]
+        fields = ["id", "name", "role_title", "hierarchy_name", "joined_date", "photo"]
 
     def get_name(self, obj):
         return obj.full_name
@@ -570,10 +741,12 @@ class ImpactMetricAdminSerializer(serializers.ModelSerializer):
 
 
 class CapabilityAdminSerializer(serializers.ModelSerializer):
+    category = LookupKeyField(models.CapabilityCategory, required=False)
+
     class Meta:
         model = models.Capability
         fields = ["id", "category", "title", "title_es", "summary", "summary_es",
-                  "description", "description_es", "icon", "order"]
+                  "description", "description_es", "order"]
 
 
 class NewsUpdateAdminSerializer(serializers.ModelSerializer):
@@ -584,10 +757,13 @@ class NewsUpdateAdminSerializer(serializers.ModelSerializer):
 
 
 class DeploymentAdminSerializer(serializers.ModelSerializer):
+    status = LookupKeyField(models.DeploymentStatus, required=False)
+
     class Meta:
         model = models.Deployment
         fields = ["id", "name", "name_es", "location", "location_es", "status",
-                  "start_date", "end_date", "summary", "summary_es", "is_public"]
+                  "start_date", "end_date", "summary", "summary_es", "is_public",
+                  "map_area"]
 
 
 class TrainingExerciseAdminSerializer(serializers.ModelSerializer):
@@ -667,6 +843,56 @@ class CountryAdminSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "name_es", "code"]
 
 
+class LookupAdminSerializer(serializers.ModelSerializer):
+    class Meta:
+        fields = ["id", "status", "note", "note_es", "updated_at"]
+        read_only_fields = ["updated_at"]
+
+
+class MemberStatusAdminSerializer(LookupAdminSerializer):
+    class Meta(LookupAdminSerializer.Meta):
+        model = models.MemberStatus
+
+
+class BloodTypeAdminSerializer(LookupAdminSerializer):
+    class Meta(LookupAdminSerializer.Meta):
+        model = models.BloodType
+
+
+class DeploymentStatusAdminSerializer(LookupAdminSerializer):
+    class Meta(LookupAdminSerializer.Meta):
+        model = models.DeploymentStatus
+
+
+class CapabilityCategoryAdminSerializer(LookupAdminSerializer):
+    class Meta(LookupAdminSerializer.Meta):
+        model = models.CapabilityCategory
+
+
+class MemberStatusSerializer(LookupSerializer):
+    class Meta:
+        model = models.MemberStatus
+        fields = ["id", "status", "label", "note", "note_es"]
+
+
+class BloodTypeSerializer(LookupSerializer):
+    class Meta:
+        model = models.BloodType
+        fields = ["id", "status", "label", "note", "note_es"]
+
+
+class DeploymentStatusSerializer(LookupSerializer):
+    class Meta:
+        model = models.DeploymentStatus
+        fields = ["id", "status", "label", "note", "note_es"]
+
+
+class CapabilityCategorySerializer(LookupSerializer):
+    class Meta:
+        model = models.CapabilityCategory
+        fields = ["id", "status", "label", "note", "note_es"]
+
+
 ADMIN_SERIALIZER_MAP = {
     models.TeamStatus: TeamStatusAdminSerializer,
     models.ImpactMetric: ImpactMetricAdminSerializer,
@@ -682,4 +908,8 @@ ADMIN_SERIALIZER_MAP = {
     models.FundingNeed: FundingNeedAdminSerializer,
     models.SponsorshipTier: SponsorshipTierAdminSerializer,
     models.Country: CountryAdminSerializer,
+    models.MemberStatus: MemberStatusAdminSerializer,
+    models.BloodType: BloodTypeAdminSerializer,
+    models.DeploymentStatus: DeploymentStatusAdminSerializer,
+    models.CapabilityCategory: CapabilityCategoryAdminSerializer,
 }

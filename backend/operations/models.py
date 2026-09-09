@@ -44,25 +44,36 @@ class ImpactMetric(models.Model):
         return f"{self.value} {self.label}"
 
 
-class Capability(models.Model):
-    CATEGORY_CHOICES = [
-        ("heavy_technical", "Heavy/Technical Rescue"),
-        ("k9", "Canine (K9) Unit"),
-        ("technical_search", "Technical Search"),
-        ("medical", "Medical Task Force"),
-        ("hazmat", "Hazardous Materials & Technical Support"),
-    ]
+class CapabilityCategory(models.Model):
+    """Lookup of capability categories (rescues, K9, search, medical, HazMat)."""
 
-    category = models.CharField(max_length=30, choices=CATEGORY_CHOICES)
+    status = models.CharField(max_length=50, unique=True, verbose_name="Key")
+    note = models.CharField(max_length=255, blank=True)
+    note_es = models.CharField(max_length=255, blank=True, verbose_name="Nota (ES)")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = "Capability categories"
+        ordering = ["status"]
+
+    def __str__(self):
+        return self.note or self.status
+
+
+class Capability(models.Model):
+    category = models.ForeignKey(
+        CapabilityCategory,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="capabilities",
+    )
     title = models.CharField(max_length=150)
     title_es = models.CharField(max_length=150, blank=True, verbose_name="Título (ES)")
     summary = models.CharField(max_length=255)
     summary_es = models.CharField(max_length=255, blank=True, verbose_name="Resumen (ES)")
     description = models.TextField()
     description_es = models.TextField(blank=True, verbose_name="Descripción (ES)")
-    icon = models.CharField(
-        max_length=50, blank=True, help_text="Icon key used by the frontend, e.g. 'shoring'"
-    )
     order = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -96,23 +107,45 @@ class NewsUpdate(models.Model):
         return self.title
 
 
-class Deployment(models.Model):
-    STATUS_CHOICES = [
-        ("active", "Active Operation"),
-        ("completed", "Completed"),
-    ]
+class DeploymentStatus(models.Model):
+    """Lookup of deployment lifecycle statuses (active / completed)."""
 
+    status = models.CharField(max_length=50, unique=True, verbose_name="Key")
+    note = models.CharField(max_length=255, blank=True)
+    note_es = models.CharField(max_length=255, blank=True, verbose_name="Nota (ES)")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = "Deployment statuses"
+        ordering = ["status"]
+
+    def __str__(self):
+        return self.note or self.status
+
+
+class Deployment(models.Model):
     name = models.CharField(max_length=200)
     name_es = models.CharField(max_length=200, blank=True, verbose_name="Nombre (ES)")
     location = models.CharField(max_length=200)
     location_es = models.CharField(max_length=200, blank=True, verbose_name="Ubicación (ES)")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="completed")
+    status = models.ForeignKey(
+        DeploymentStatus,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="deployments",
+    )
     start_date = models.DateField()
     end_date = models.DateField(null=True, blank=True)
     summary = models.TextField()
     summary_es = models.TextField(blank=True, verbose_name="Resumen (ES)")
     is_public = models.BooleanField(
         default=True, help_text="Uncheck to withhold details per safety protocol"
+    )
+    map_area = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="GeoJSON polygon of the deployment area, drawn by the admin",
     )
 
     class Meta:
@@ -521,6 +554,38 @@ class SponsorshipTier(models.Model):
         return self.name
 
 
+class MemberStatus(models.Model):
+    """Lookup of member roster statuses (active, probation, leave, inactive)."""
+
+    status = models.CharField(max_length=50, unique=True, verbose_name="Key")
+    note = models.CharField(max_length=255, blank=True)
+    note_es = models.CharField(max_length=255, blank=True, verbose_name="Nota (ES)")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = "Member statuses"
+        ordering = ["status"]
+
+    def __str__(self):
+        return self.note or self.status
+
+
+class BloodType(models.Model):
+    """Lookup of member blood types (A+, O-, …)."""
+
+    status = models.CharField(max_length=50, unique=True, verbose_name="Key")
+    note = models.CharField(max_length=255, blank=True)
+    note_es = models.CharField(max_length=255, blank=True, verbose_name="Nota (ES)")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = "Blood types"
+        ordering = ["status"]
+
+    def __str__(self):
+        return self.note or self.status
+
+
 class Member(models.Model):
     """An active/probationary team member — the admin module's roster.
 
@@ -528,21 +593,18 @@ class Member(models.Model):
     command staff and are shown on the public Command & Leadership section.
     """
 
-    ACTIVE = "active"
-    PROBATION = "probation"
-    LEAVE = "leave"
-    INACTIVE = "inactive"
-    STATUS_CHOICES = [
-        (ACTIVE, "Active"),
-        (PROBATION, "Probationary"),
-        (LEAVE, "On Leave"),
-        (INACTIVE, "Inactive"),
-    ]
-
     full_name = models.CharField(max_length=150)
     email = models.EmailField(unique=True)
     phone = models.CharField(max_length=30, blank=True)
     id_number = models.CharField(max_length=50, blank=True, verbose_name="National ID number")
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="member_profile",
+        help_text="Login account created when an applicant is activated.",
+    )
     country = models.ForeignKey(
         "Country",
         on_delete=models.SET_NULL,
@@ -551,11 +613,24 @@ class Member(models.Model):
         related_name="members",
         verbose_name="Country",
     )
-    blood_type = models.CharField(max_length=10, blank=True, verbose_name="Blood type")
+    blood_type = models.ForeignKey(
+        BloodType,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="members",
+        verbose_name="Blood type",
+    )
     role = models.ForeignKey(
         TeamRole, on_delete=models.SET_NULL, null=True, blank=True, related_name="members"
     )
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PROBATION)
+    status = models.ForeignKey(
+        MemberStatus,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="members",
+    )
     joined_date = models.DateField()
     certifications = models.TextField(blank=True, help_text="One certification per line")
     photo = models.ImageField(upload_to="members/", blank=True, null=True)
@@ -567,7 +642,23 @@ class Member(models.Model):
         ordering = ["full_name"]
 
     def __str__(self):
-        return f"{self.full_name} ({self.get_status_display()})"
+        return f"{self.full_name} ({self.get_status_label()})"
+
+    def get_status_label(self):
+        if self.status is None:
+            return "No status"
+        return self.status.note or self.status.status
+
+    @property
+    def status_key(self):
+        if self.status is None:
+            return ""
+        return self.status.status
+
+    @property
+    def member_number(self):
+        """Login username of the linked account (the member's email) if present."""
+        return self.user.username if self.user_id else ""
 
 
 class ContactMessage(models.Model):

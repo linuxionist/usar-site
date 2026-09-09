@@ -3,15 +3,19 @@ import { Link, useParams } from "react-router-dom";
 import AdminLayout from "./AdminLayout.jsx";
 import { adminEndpoints } from "../api.js";
 import { CRUD_CONFIG } from "../crudConfig.js";
+import { useLanguage } from "../../i18n/LanguageContext.jsx";
+import { adminT } from "../../i18n/adminTranslations.js";
 
-function formatCell(value, type) {
+function formatCell(value, type, yesLabel, noLabel) {
   if (value === null || value === undefined || value === "") return "—";
-  if (type === "boolean") return value ? "Yes" : "No";
+  if (type === "boolean") return value ? yesLabel : noLabel;
   if (type === "number") return Number(value).toLocaleString();
   return String(value);
 }
 
 export default function ResourceList() {
+  const { lang } = useLanguage();
+  const t = (key, vars) => adminT(lang, key, vars);
   const { resource } = useParams();
   const config = CRUD_CONFIG[resource];
   const endpoint = adminEndpoints[config.endpointKey];
@@ -68,7 +72,7 @@ export default function ResourceList() {
         setRows(list);
         setCount(data.count ?? list.length);
       })
-      .catch(() => setError("Unable to load content."))
+      .catch(() => setError(t("admin.resource.loadError")))
       .finally(() => setLoading(false));
   }, [endpoint, page, pageSize, search, ordering, filterValues]);
 
@@ -93,7 +97,8 @@ export default function ResourceList() {
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
 
   async function handleDelete(row) {
-    if (!window.confirm(`Delete "${row[config.listColumns[0]?.key] ?? row.id}"?`)) return;
+    const name = row[config.listColumns[0]?.key] ?? row.id;
+    if (!window.confirm(t("admin.resource.deleteConfirm", { name }))) return;
     await endpoint.remove(row.id);
     load();
   }
@@ -102,17 +107,17 @@ export default function ResourceList() {
     <AdminLayout>
       <div className="section-head" style={{ marginBottom: 24 }}>
         <h2>
-          {config.title} ({count})
+          {t(config.title)} ({count})
         </h2>
         <Link to={`/admin/content/${resource}/new`} className="btn btn-primary">
-          Add {config.noun}
+          {t("admin.resource.add", { noun: t(config.noun) })}
         </Link>
       </div>
 
       <div className="admin-toolbar">
         <input
           className="admin-search"
-          placeholder="Search this content…"
+          placeholder={t("admin.resource.search")}
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
@@ -128,7 +133,7 @@ export default function ResourceList() {
               setPage(1);
             }}
           >
-            <option value="">{f.label}</option>
+            <option value="">{t(f.label)}</option>
             {(filterOptions[f.param] ?? []).map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
@@ -138,14 +143,15 @@ export default function ResourceList() {
         ))}
       </div>
 
-      {loading && <p className="loading-note">Loading…</p>}
+      {loading && <p className="loading-note">{t("admin.resource.loading")}</p>}
       {error && <p className="empty-note">{error}</p>}
       {!loading && !error && rows.length === 0 && (
-        <p className="empty-note">No records match your filters.</p>
+        <p className="empty-note">{t("admin.resource.empty")}</p>
       )}
 
       {!loading && rows.length > 0 && (
-        <table className="admin-table">
+        <div className="admin-table-scroll">
+          <table className="admin-table">
           <thead>
             <tr>
               {config.listColumns.map((col) => (
@@ -156,43 +162,44 @@ export default function ResourceList() {
                       className={`th-sort ${ordering === sortKeyFor(col) || ordering === `-${sortKeyFor(col)}` ? "th-sort-active" : ""}`}
                       onClick={() => toggleOrdering(sortKeyFor(col))}
                     >
-                      {col.label || col.key}
+                      {t(col.label || col.key)}
                       <span className="th-sort-indicator">
                         {ordering === sortKeyFor(col) ? "▲" : ordering === `-${sortKeyFor(col)}` ? "▼" : ""}
                       </span>
                     </button>
                   ) : (
-                    col.label || col.key
+                    t(col.label || col.key)
                   )}
                 </th>
               ))}
-              <th aria-label="Actions" style={{ width: 120 }} />
+              <th aria-label={t("admin.resource.actions")} style={{ width: 120 }} />
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.id}>
                 {config.listColumns.map((col, idx) => (
-                  <td key={col.key}>
+                  <td key={col.key} data-label={t(col.label || col.key)}>
                     {idx === 0 ? (
                       <Link to={`/admin/content/${resource}/${row.id}`}>
-                        {formatCell(row[col.key], col.type)}
+                        {formatCell(row[col.key], col.type, t("admin.resource.yes"), t("admin.resource.no"))}
                       </Link>
                     ) : (
-                      formatCell(row[col.key], col.type)
+                      formatCell(row[col.key], col.type, t("admin.resource.yes"), t("admin.resource.no"))
                     )}
                   </td>
                 ))}
-                <td className="admin-row-actions">
-                  <Link to={`/admin/content/${resource}/${row.id}`}>Edit</Link>
+                <td className="admin-row-actions" data-label={t("admin.resource.actions")}>
+                  <Link to={`/admin/content/${resource}/${row.id}`}>{t("admin.resource.edit")}</Link>
                   <button className="link-button" onClick={() => handleDelete(row)}>
-                    Delete
+                    {t("admin.resource.delete")}
                   </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       {!loading && !error && count > 0 && (
@@ -203,10 +210,10 @@ export default function ResourceList() {
             disabled={page === 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
           >
-            ← Prev
+            {t("admin.resource.prev")}
           </button>
           <span className="admin-pagination-info">
-            Page {page} of {totalPages}
+            {t("admin.resource.page", { page, total: totalPages })}
           </span>
           <button
             type="button"
@@ -214,7 +221,7 @@ export default function ResourceList() {
             disabled={page === totalPages}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
           >
-            Next →
+            {t("admin.resource.next")}
           </button>
         </div>
       )}

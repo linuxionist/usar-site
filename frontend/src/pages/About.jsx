@@ -50,6 +50,11 @@ export default function About() {
             {leadership.length === 0 && <p className="empty-note">{t("about.leadership.empty")}</p>}
             {leadership.map((m) => (
               <div className="tile" key={m.id}>
+                {m.photo && (
+                  <div className="tile-photo">
+                    <img src={m.photo} alt={m.name} loading="lazy" />
+                  </div>
+                )}
                 <h3>{m.name}</h3>
                 <span className="tile-tag" style={{ marginTop: 0 }}>
                   {m.role_title}

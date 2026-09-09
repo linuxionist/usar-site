@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from operations import models
@@ -8,6 +9,7 @@ class Command(BaseCommand):
     help = "Populates the database with sample USAR team content (EN + ES) for local development."
 
     def handle(self, *args, **options):
+        User = get_user_model()
         status, _ = models.TeamStatus.objects.update_or_create(
             id=1,
             defaults={
@@ -16,6 +18,57 @@ class Command(BaseCommand):
                 "note_es": "Todos los grupos de tarea en espera.",
             },
         )
+
+        capability_categories = [
+            ("heavy_technical", "Heavy/Technical Rescue", "Rescate Pesado/Técnico"),
+            ("k9", "Canine (K9) Unit", "Unidad Canina (K9)"),
+            ("technical_search", "Technical Search", "Búsqueda Técnica"),
+            ("medical", "Medical Task Force", "Grupo Médico de Tarea"),
+            ("hazmat", "Hazardous Materials & Technical Support", "Materiales Peligrosos y Soporte Técnico"),
+        ]
+        cat_map = {}
+        for key, note, note_es in capability_categories:
+            cat, _ = models.CapabilityCategory.objects.update_or_create(
+                status=key, defaults={"note": note, "note_es": note_es}
+            )
+            cat_map[key] = cat
+
+        member_statuses = [
+            ("active", "Active", "Activo"),
+            ("probation", "Probationary", "Probatorio"),
+            ("leave", "On Leave", "De Baja Temporal"),
+            ("inactive", "Inactive", "Inactivo"),
+        ]
+        member_status_map = {}
+        for key, note, note_es in member_statuses:
+            obj, _ = models.MemberStatus.objects.update_or_create(
+                status=key, defaults={"note": note, "note_es": note_es}
+            )
+            member_status_map[key] = obj
+
+        blood_types = [
+            ("A+", "A+", "A+"), ("A-", "A-", "A-"),
+            ("B+", "B+", "B+"), ("B-", "B-", "B-"),
+            ("AB+", "AB+", "AB+"), ("AB-", "AB-", "AB-"),
+            ("O+", "O+", "O+"), ("O-", "O-", "O-"),
+        ]
+        blood_type_map = {}
+        for key, note, note_es in blood_types:
+            obj, _ = models.BloodType.objects.update_or_create(
+                status=key, defaults={"note": note, "note_es": note_es}
+            )
+            blood_type_map[key] = obj
+
+        deployment_statuses = [
+            ("active", "Active Operation", "Operación Activa"),
+            ("completed", "Completed", "Completado"),
+        ]
+        deployment_status_map = {}
+        for key, note, note_es in deployment_statuses:
+            obj, _ = models.DeploymentStatus.objects.update_or_create(
+                status=key, defaults={"note": note, "note_es": note_es}
+            )
+            deployment_status_map[key] = obj
 
         metrics = [
             ("Years Active", "27", "Años Activos"),
@@ -74,7 +127,7 @@ class Command(BaseCommand):
             models.Capability.objects.update_or_create(
                 title=title,
                 defaults={
-                    "category": cat, "title_es": title_es,
+                    "category": cat_map[cat], "title_es": title_es,
                     "summary": summary, "summary_es": summary_es,
                     "description": desc, "description_es": desc_es, "order": i,
                 },
@@ -111,11 +164,23 @@ class Command(BaseCommand):
                 "name_es": "Respuesta a Inundaciones Regionales",
                 "location": "River Valley County",
                 "location_es": "Condado del Valle del Río",
-                "status": "completed",
+                "status": deployment_status_map["completed"],
                 "start_date": date.today() - timedelta(days=20),
                 "end_date": date.today() - timedelta(days=14),
                 "summary": "Swift-water search and structural safety assessments across 40 affected structures.",
                 "summary_es": "Búsqueda en aguas rápidas y evaluaciones de seguridad estructural en 40 estructuras afectadas.",
+                "map_area": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [-84.392, 33.748],
+                            [-84.38, 33.75],
+                            [-84.377, 33.739],
+                            [-84.391, 33.737],
+                            [-84.392, 33.748],
+                        ]
+                    ],
+                },
             },
         )
 
@@ -233,12 +298,13 @@ class Command(BaseCommand):
             ("Marcus Velez", "marcus.velez@example.com", "Deputy Commander", "active",
              "Former fire captain; leads the collapse-rescue specialty."),
         ]
-        for full_name, email, role_title, status, notes in leadership_members:
+        for full_name, email, role_title, status_key, notes in leadership_members:
             role = models.TeamRole.objects.filter(title=role_title).first()
             models.Member.objects.update_or_create(
                 email=email,
                 defaults={
-                    "full_name": full_name, "role": role, "status": status,
+                    "full_name": full_name, "role": role,
+                    "status": member_status_map[status_key],
                     "joined_date": date.today() - timedelta(days=365),
                     "notes": notes,
                 },
@@ -348,6 +414,14 @@ class Command(BaseCommand):
             if phase in list(models.VolunteerApplication.PHASE_CHECKLIST):
                 models.ensure_checklist_items(app, phase)
 
+        # Give the board-phase applicant fixed ID data so admin approval
+        # creates a member portal login with predictable credentials (username
+        # is derived from the applicant's email).
+        board_app = app_map["d.okafor@example.com"]
+        board_app.id_number = "ID-2024-7711"
+        board_app.application_code = "USAR-ABC123"
+        board_app.save(update_fields=["id_number", "application_code"])
+
         for app in app_map.values():
             for item in app.checklist.all():
                 if item.label not in models.VolunteerApplication.PHASE_CHECKLIST.get(item.phase, []):
@@ -402,4 +476,32 @@ class Command(BaseCommand):
                 code=code, defaults={"name": name, "name_es": name_es}
             )
 
-        self.stdout.write(self.style.SUCCESS("Demo data seeded (EN + ES)."))
+        demo_member, _ = models.Member.objects.update_or_create(
+            email="lena.croft@example.com",
+            defaults={
+                "full_name": "Lena Croft",
+                "phone": "+34 633 444 555",
+                "id_number": "ID-2020-3399",
+                "country": models.Country.objects.filter(code="GB").first(),
+                "role": models.TeamRole.objects.filter(title="Rescue Specialist").first(),
+                "status": member_status_map["active"],
+                "joined_date": date.today() - timedelta(days=700),
+            },
+        )
+        portal_user, created = User.objects.get_or_create(
+            username=demo_member.email.lower(),
+            defaults={"email": demo_member.email, "first_name": demo_member.full_name},
+        )
+        if created:
+            portal_user.set_password(demo_member.id_number)
+            portal_user.save(update_fields=["password"])
+        demo_member.user = portal_user
+        demo_member.save(update_fields=["user"])
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                "Demo data seeded (EN + ES). "
+                f"Member portal: {demo_member.email} / {demo_member.id_number} (Lena Croft). "
+                "Approving Daniel Okafor creates d.okafor@example.com / ID-2024-7711."
+            )
+        )

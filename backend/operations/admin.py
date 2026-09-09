@@ -35,7 +35,7 @@ class CapabilityAdmin(admin.ModelAdmin):
     list_editable = ["order"]
     search_fields = ["title", "title_es", "summary", "summary_es"]
     fieldsets = (
-        ("English", {"fields": (("category", "order"), "title", "summary", "description", "icon")}),
+        ("English", {"fields": (("category", "order"), "title", "summary", "description")}),
         ("Spanish", {"fields": ("title_es", "summary_es", "description_es")}),
     )
 
@@ -59,6 +59,7 @@ class DeploymentAdmin(admin.ModelAdmin):
     search_fields = ["name", "name_es", "location", "location_es"]
     fieldsets = (
         ("English", {"fields": ("name", "location", "status", ("start_date", "end_date"), "summary", "is_public")}),
+        ("Map Area (GeoJSON)", {"fields": ("map_area",)}),
         ("Spanish", {"fields": ("name_es", "location_es", "summary_es")}),
     )
 
@@ -261,3 +262,39 @@ class CountryAdmin(admin.ModelAdmin):
     list_display = ["name", "name_es", "code"]
     list_display_links = ["name"]
     search_fields = ["name", "name_es", "code"]
+
+
+class LookupAdminBase(admin.ModelAdmin):
+    """Shared admin for status/note/note_es lookup tables with an editable key."""
+
+    list_display = ["key", "note", "note_es", "updated_at"]
+    list_display_links = ["key"]
+    search_fields = ["status", "note", "note_es"]
+    readonly_fields = ["updated_at"]
+    fieldsets = (
+        ("Record", {"fields": (("status", "updated_at"), "note", "note_es")}),
+    )
+
+    @admin.display(description="Key", ordering="status")
+    def key(self, obj):
+        return obj.status
+
+
+@admin.register(models.MemberStatus)
+class MemberStatusAdmin(LookupAdminBase):
+    pass
+
+
+@admin.register(models.BloodType)
+class BloodTypeAdmin(LookupAdminBase):
+    pass
+
+
+@admin.register(models.DeploymentStatus)
+class DeploymentStatusAdmin(LookupAdminBase):
+    pass
+
+
+@admin.register(models.CapabilityCategory)
+class CapabilityCategoryAdmin(LookupAdminBase):
+    pass

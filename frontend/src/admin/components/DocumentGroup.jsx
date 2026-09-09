@@ -1,4 +1,9 @@
+import { useLanguage } from "../../i18n/LanguageContext.jsx";
+import { adminT } from "../../i18n/adminTranslations.js";
+
 export default function DocumentGroup({ label, items, decide }) {
+  const { lang } = useLanguage();
+  const t = (key) => adminT(lang, key);
   if (!items || items.length === 0) return null;
   return (
     <div className="doc-list">
@@ -9,14 +14,14 @@ export default function DocumentGroup({ label, items, decide }) {
             {d.filename}
           </a>
           <span className={d.approved ? "status-active" : "status-probation"}>
-            {d.approved ? "Approved" : "Pending"}
+            {d.approved ? t("admin.docs.approved") : t("admin.docs.pending")}
           </span>
           <div className="doc-actions">
             <button className="link-button" onClick={() => decide(d, true)}>
-              Approve
+              {t("admin.docs.approve")}
             </button>
             <button className="link-button" onClick={() => decide(d, false)}>
-              Reject
+              {t("admin.docs.reject")}
             </button>
           </div>
         </div>

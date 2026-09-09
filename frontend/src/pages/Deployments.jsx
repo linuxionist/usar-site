@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import PageHero from "../components/PageHero.jsx";
+import MapDisplay from "../components/MapDisplay.jsx";
 import { endpoints } from "../api/client.js";
 import { useLanguage } from "../i18n/LanguageContext.jsx";
 
@@ -41,12 +42,19 @@ export default function Deployments() {
               <h2>{t("deployments.active.title")}</h2>
             </div>
             {active.map((d) => (
-              <div className="record-row" key={d.id}>
-                <span className="record-date">{fmtDate(d.start_date)}</span>
-                <span className="record-title">
-                  {d.name} — {d.location}
-                </span>
-                <span className="pill active">{t("deployments.active.pill")}</span>
+              <div className="record-block" key={d.id}>
+                <div className="record-row">
+                  <span className="record-date">{fmtDate(d.start_date)}</span>
+                  <span className="record-title">
+                    {d.name} — {d.location}
+                  </span>
+                  <span className="pill active">{t("deployments.active.pill")}</span>
+                </div>
+                {d.map_area && (
+                  <div className="record-map">
+                    <MapDisplay geoJSON={d.map_area} />
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -60,12 +68,19 @@ export default function Deployments() {
           </div>
           {archive.length === 0 && <p className="empty-note">{t("deployments.archive.empty")}</p>}
           {archive.map((d) => (
-            <div className="record-row" key={d.id}>
-              <span className="record-date">{fmtDate(d.start_date)}</span>
-              <span className="record-title">
-                {d.name} — {d.location}
-              </span>
-              <span className="pill">{d.status_display}</span>
+            <div className="record-block" key={d.id}>
+              <div className="record-row">
+                <span className="record-date">{fmtDate(d.start_date)}</span>
+                <span className="record-title">
+                  {d.name} — {d.location}
+                </span>
+                <span className="pill">{d.status_display}</span>
+              </div>
+              {d.map_area && (
+                <div className="record-map">
+                  <MapDisplay geoJSON={d.map_area} />
+                </div>
+              )}
             </div>
           ))}
         </div>

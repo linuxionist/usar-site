@@ -1,17 +1,27 @@
 import os
+import secrets
+
+from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
 from rest_framework import viewsets, mixins, filters, permissions, status
 from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
+import django_filters
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.authtoken.views import ObtainAuthToken
+from rest_framework.authtoken.serializers import AuthTokenSerializer
 from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import action
+from django.db import transaction
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.models import Case, When, Value, CharField as DjangoCharField
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from . import models, serializers
+
+User = get_user_model()
 
 
 class IsStaffOrReadOnly(permissions.BasePermission):
@@ -62,7 +72,15 @@ class ImpactMetricViewSet(StaffContentViewSet):
 class CapabilityViewSet(StaffContentViewSet):
     queryset = models.Capability.objects.all()
     serializer_class = serializers.CapabilitySerializer
-    filterset_fields = ["category"]
+    filterset_fields = ["category__status"]
+
+    def get_queryset(self):
+        # Filtering by ?category=<key> maps onto the FK's lookup key.
+        qs = super().get_queryset()
+        category = self.request.query_params.get("category")
+        if category:
+            qs = qs.filter(category__status=category)
+        return qs
 
 
 class NewsUpdateViewSet(StaffContentViewSet):
@@ -80,13 +98,17 @@ class NewsUpdateViewSet(StaffContentViewSet):
 
 class DeploymentViewSet(StaffContentViewSet):
     serializer_class = serializers.DeploymentSerializer
-    filterset_fields = ["status"]
 
     def get_queryset(self):
         # Staff manage all records; the public sees public deployments only.
         if self.request.user and self.request.user.is_staff:
-            return models.Deployment.objects.all()
-        return models.Deployment.objects.filter(is_public=True)
+            qs = models.Deployment.objects.all()
+        else:
+            qs = models.Deployment.objects.filter(is_public=True)
+        status_key = self.request.query_params.get("status")
+        if status_key:
+            qs = qs.filter(status__status=status_key)
+        return qs
 
 
 class TrainingExerciseViewSet(StaffContentViewSet):
@@ -331,7 +353,6 @@ class VolunteerApplicationViewSet(viewsets.ModelViewSet):
         )
         app.reviewed = True
         app.is_rejected = False
-        app.save()
         member, _ = models.Member.objects.update_or_create(
             email=app.email,
             defaults={
@@ -340,12 +361,36 @@ class VolunteerApplicationViewSet(viewsets.ModelViewSet):
                 "id_number": app.id_number,
                 "country": app.country,
                 "role": app.role_interest,
-                "status": models.Member.ACTIVE,
+                "status": models.MemberStatus.objects.filter(status="active").first(),
                 "joined_date": timezone.localdate(),
+                "user": self._create_member_user(app),
             },
         )
+        app.save()
         self._log(app, f"Approved for Active Duty by {self._approver_label()}")
         return Response(self._serialized(app))
+
+    def _create_member_user(self, app):
+        """Create (or fetch) the login account for an activated applicant.
+
+        Username = the applicant's email address; initial password = the
+        national ID number they supplied on the form. Re-activating an already
+        approved application reuses the existing account so credentials don't
+        silently change.
+        """
+        username = (app.email or "").strip().lower()
+        if not username:
+            username = f"member{secrets.token_hex(4)}".upper()
+        password = app.id_number or ""
+        user, created = User.objects.get_or_create(
+            username=username,
+            defaults={"email": app.email, "first_name": app.full_name or ""},
+        )
+        if password:
+            validate_password(password, user)
+            user.set_password(password)
+            user.save(update_fields=["password"])
+        return user
 
     @action(detail=True, methods=["post"])
     def archive(self, request, pk=None):
@@ -526,16 +571,92 @@ class CountryViewSet(StaffContentViewSet):
     pagination_class = None
 
 
+class LookupViewSet(StaffContentViewSet):
+    """Base viewset for the small bilingual lookup tables."""
+
+    pagination_class = None
+
+
+class MemberStatusViewSet(LookupViewSet):
+    queryset = models.MemberStatus.objects.all()
+    serializer_class = serializers.MemberStatusSerializer
+
+
+class BloodTypeViewSet(LookupViewSet):
+    queryset = models.BloodType.objects.all()
+    serializer_class = serializers.BloodTypeSerializer
+
+
+class DeploymentStatusViewSet(LookupViewSet):
+    queryset = models.DeploymentStatus.objects.all()
+    serializer_class = serializers.DeploymentStatusSerializer
+
+
+class CapabilityCategoryViewSet(LookupViewSet):
+    queryset = models.CapabilityCategory.objects.all()
+    serializer_class = serializers.CapabilityCategorySerializer
+
+
 class MemberViewSet(viewsets.ModelViewSet):
     """Full CRUD roster of team members — staff-only, powers the admin module."""
 
     queryset = models.Member.objects.all()
     serializer_class = serializers.MemberSerializer
     permission_classes = [permissions.IsAdminUser]
-    filterset_fields = ["status", "role"]
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter, DjangoFilterBackend]
+    filterset_fields = ["status__status", "role", "blood_type__status"]
     search_fields = ["full_name", "email", "id_number", "country__name", "certifications"]
-    ordering_fields = ["full_name", "joined_date", "status"]
+    ordering_fields = ["full_name", "joined_date", "status__status"]
+
+    def get_queryset(self):
+        qs = models.Member.objects.all().select_related("status", "blood_type", "role", "country")
+        status_key = self.request.query_params.get("status")
+        blood_key = self.request.query_params.get("blood_type")
+        if status_key:
+            qs = qs.filter(status__status=status_key)
+        if blood_key:
+            qs = qs.filter(blood_type__status=blood_key)
+        return qs
+
+    @action(detail=True, methods=["post"])
+    def set_password(self, request, pk=None):
+        """Set/change the password of the member's portal login account.
+
+        If the member has no account yet, one is created on the fly (username
+        derived from their email address) so their portal access is immediately
+        usable. Existing tokens are revoked so the old password stops working
+        at once.
+        """
+        member = self.get_object()
+        serializer = serializers.MemberPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        new_password = serializer.validated_data["new_password"]
+
+        with transaction.atomic():
+            if member.user_id is None:
+                user, created = self._ensure_member_login(member)
+            else:
+                user = member.user
+                created = False
+            try:
+                validate_password(new_password, user)
+            except Exception as exc:
+                messages = getattr(exc, "messages", None) or [str(exc)]
+                raise DRFValidationError({"new_password": messages}) from exc
+            user.set_password(new_password)
+            user.save(update_fields=["password"])
+            # Revoke the member's existing sessions so the new password takes effect.
+            Token.objects.filter(user=user).delete()
+        return Response({"username": user.username, "created": created})
+
+    @staticmethod
+    def _ensure_member_login(member):
+        base = (member.email or "").strip().lower()
+        username = base or f"member{secrets.token_hex(4)}".upper()
+        user, _ = User.objects.get_or_create(username=username, defaults={"email": member.email or ""})
+        member.user = user
+        member.save(update_fields=["user"])
+        return user, False
 
 
 class CommandLeadershipViewSet(viewsets.ReadOnlyModelViewSet):
@@ -581,3 +702,122 @@ class CurrentUserView(APIView):
         return Response(
             {"username": request.user.username, "is_staff": request.user.is_staff}
         )
+
+
+class MemberPortalViewSet(viewsets.GenericViewSet):
+    """Self-service portal for activated team members.
+
+    Members sign in with their email address (username) and national ID
+    number (initial password) — both captured when the applicant was approved.
+    A new auth token is issued on every login; staff admins may finish here too,
+    but the public member flow deliberately stays separate from the admin auth.
+    """
+
+    permission_classes = [permissions.AllowAny]
+    serializer_class = serializers.MemberPortalSerializer
+
+    def get_serializer_context(self):
+        return {"request": self.request}
+
+    @action(detail=False, methods=["post"])
+    def login(self, request):
+        serializer = AuthTokenSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data["user"]
+        token, _ = Token.objects.get_or_create(user=user)
+        return Response(
+            {
+                "token": token.key,
+                "username": user.username,
+                "email": user.email,
+                "is_staff": user.is_staff,
+            }
+        )
+
+    @action(detail=False, methods=["get"])
+    def profile(self, request):
+        if not (request.user and request.user.is_authenticated):
+            return Response({"detail": "Authentication credentials were not provided."}, status=401)
+        member = models.Member.objects.filter(user=request.user).select_related(
+            "status", "blood_type", "role", "country", "user"
+        ).first()
+        if member is None:
+            return Response(
+                {"detail": "No member profile is linked to this account."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(self.get_serializer(member).data)
+
+    @action(detail=False, methods=["post", "patch"])
+    def update_profile(self, request):
+        """Let a member edit their own profile.
+
+        The member may change their login username, set a new password, and
+        update every roster field except joined_date, role and status (those
+        remain staff-controlled). A password change revokes the old tokens and
+        issues a fresh one (returned as ``new_token``) so the session survives.
+        """
+        if not (request.user and request.user.is_authenticated):
+            return Response({"detail": "Authentication credentials were not provided."}, status=401)
+        member = models.Member.objects.filter(user=request.user).first()
+        if member is None:
+            return Response(
+                {"detail": "No member profile is linked to this account."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = serializers.MemberSelfUpdateSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        with transaction.atomic():
+            username = data.get("username")
+            if username:
+                collision = (
+                    User.objects.filter(username__iexact=username)
+                    .exclude(pk=request.user.pk)
+                    .exists()
+                )
+                if collision:
+                    return Response(
+                        {"username": "That username is already in use."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if request.user.username.lower() != username:
+                    request.user.username = username
+                    request.user.save(update_fields=["username"])
+
+            for field in ("full_name", "phone", "id_number", "certifications", "notes"):
+                if field in data:
+                    setattr(member, field, data[field])
+
+            if "email" in data:
+                email = (data["email"] or "").strip().lower()
+                member.email = email
+                request.user.email = email
+                request.user.save(update_fields=["email"])
+
+            if "country" in data:
+                member.country = data["country"]
+            if "blood_type" in data:
+                member.blood_type = data["blood_type"]
+
+            new_token = None
+            new_password = data.get("new_password")
+            if new_password:
+                try:
+                    validate_password(new_password, request.user)
+                except Exception as exc:
+                    messages = getattr(exc, "messages", None) or [str(exc)]
+                    raise DRFValidationError({"new_password": messages}) from exc
+                request.user.set_password(new_password)
+                request.user.save(update_fields=["password"])
+                Token.objects.filter(user=request.user).delete()
+                new_token, _ = Token.objects.get_or_create(user=request.user)
+
+            member.save()
+
+        payload = self.get_serializer(member).data
+        if new_token:
+            payload["new_token"] = new_token.key
+        return Response(payload)

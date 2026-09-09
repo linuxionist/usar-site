@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation } from "react-router-dom";
+import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 import Header from "./components/Header.jsx";
 import Footer from "./components/Footer.jsx";
 import Home from "./pages/Home.jsx";
@@ -8,6 +8,7 @@ import Join from "./pages/Join.jsx";
 import About from "./pages/About.jsx";
 import Donate from "./pages/Donate.jsx";
 import Contact from "./pages/Contact.jsx";
+import MemberProfile from "./pages/MemberProfile.jsx";
 
 import ProtectedRoute from "./admin/ProtectedRoute.jsx";
 import Login from "./admin/pages/Login.jsx";
@@ -21,11 +22,13 @@ import ResourceForm from "./admin/components/ResourceForm.jsx";
 
 export default function App() {
   const location = useLocation();
-  const isAdminRoute = location.pathname.startsWith("/admin");
+  // Public header/footer are skipped on standalone shells (admin + member portal).
+  const isStandaloneRoute =
+    location.pathname.startsWith("/admin") || location.pathname.startsWith("/member");
 
   return (
     <>
-      {!isAdminRoute && <Header />}
+      {!isStandaloneRoute && <Header />}
       <main>
         <Routes>
           <Route path="/" element={<Home />} />
@@ -35,6 +38,15 @@ export default function App() {
           <Route path="/about" element={<About />} />
           <Route path="/donate" element={<Donate />} />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/member/login" element={<Navigate to="/admin/login" replace />} />
+          <Route
+            path="/member/profile"
+            element={
+              <ProtectedRoute>
+                <MemberProfile />
+              </ProtectedRoute>
+            }
+          />
 
           <Route path="/admin/login" element={<Login />} />
           <Route
@@ -113,7 +125,7 @@ export default function App() {
           />
         </Routes>
       </main>
-      {!isAdminRoute && <Footer />}
+      {!isStandaloneRoute && <Footer />}
     </>
   );
 }

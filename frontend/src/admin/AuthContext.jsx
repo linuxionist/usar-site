@@ -22,11 +22,12 @@ export function AuthProvider({ children }) {
 
   async function login(username, password) {
     const res = await adminEndpoints.login(username, password);
-    if (!res.data.is_staff) {
-      throw new Error("This account does not have admin access.");
-    }
+    // Members sign in through the same flow; non-staff accounts land in the
+    // portal where the UI (and backend) restricts them to their own profile.
     tokenStore.set(res.data.token);
-    setUser({ username: res.data.username, is_staff: res.data.is_staff });
+    const next = { username: res.data.username, is_staff: res.data.is_staff };
+    setUser(next);
+    return next;
   }
 
   function logout() {
@@ -34,8 +35,14 @@ export function AuthProvider({ children }) {
     setUser(null);
   }
 
+  async function refreshUser() {
+    const res = await adminEndpoints.currentUser();
+    setUser({ username: res.data.username, is_staff: res.data.is_staff });
+    return res.data;
+  }
+
   return (
-    <AuthContext.Provider value={{ user, checking, login, logout }}>
+    <AuthContext.Provider value={{ user, checking, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

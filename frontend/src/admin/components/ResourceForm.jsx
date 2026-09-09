@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import AdminLayout from "./AdminLayout.jsx";
+import MapDrawField from "./MapDrawField.jsx";
 import { adminEndpoints } from "../api.js";
 import { CRUD_CONFIG } from "../crudConfig.js";
+import { useLanguage } from "../../i18n/LanguageContext.jsx";
+import { adminT } from "../../i18n/adminTranslations.js";
 
 function buildInitial(config) {
   const data = {};
@@ -17,6 +20,8 @@ function buildInitial(config) {
 }
 
 export default function ResourceForm() {
+  const { lang } = useLanguage();
+  const t = (key, vars) => adminT(lang, key, vars);
   const { resource, id } = useParams();
   const config = CRUD_CONFIG[resource];
   const endpoint = adminEndpoints[config.endpointKey];
@@ -68,7 +73,7 @@ export default function ResourceForm() {
         }
         setForm(next);
       })
-      .catch(() => setError("Unable to load this record."))
+      .catch(() => setError(t("admin.resource.loadRecordError")))
       .finally(() => setLoading(false));
   }, [id, isEditing, endpoint, config]);
 
@@ -84,6 +89,7 @@ export default function ResourceForm() {
     setError(null);
     setSuccess(false);
     const payload = { ...form };
+    if (payload.map_area === "" || payload.map_area === null) delete payload.map_area;
     try {
       if (isEditing) {
         await endpoint.update(id, payload);
@@ -94,7 +100,7 @@ export default function ResourceForm() {
       }
     } catch (err) {
       const data = err.response?.data;
-      setError(data ? Object.values(data).flat().join(" ") : "Unable to save this record.");
+      setError(data ? Object.values(data).flat().join(" ") : t("admin.resource.saveError"));
     } finally {
       setSaving(false);
     }
@@ -104,46 +110,52 @@ export default function ResourceForm() {
     <AdminLayout>
       <div className="section-head" style={{ marginBottom: 24 }}>
         <h2>
-          {isEditing ? `Edit ${config.noun}` : `Add ${config.noun}`}
+          {isEditing
+            ? t("admin.resource.editNoun", { noun: t(config.noun) })
+            : t("admin.resource.add", { noun: t(config.noun) })}
         </h2>
         <Link to={`/admin/content/${resource}`} className="link-more">
-          ← Back to {config.title.toLowerCase()}
+          {t("admin.resource.back", { title: t(config.title) })}
         </Link>
       </div>
 
       {loading ? (
-        <p className="loading-note">Loading…</p>
+        <p className="loading-note">{t("admin.resource.loading")}</p>
       ) : (
         <form className="form-grid" onSubmit={handleSubmit}>
           {config.pairs.map((p) => (
             <div key={p.en} className="field full">
-              <label>{p.label}</label>
+              <label>{t(p.label)}</label>
               <div className="lang-pair">
                 <div className="field half">
                   <label className="lang-tag">EN</label>
-                  {renderInput(p.type, p.en, form[p.en], handleChange, {}, refOptions)}
+                  {renderInput(p.type, p.en, form[p.en], handleChange, {}, refOptions, t)}
                 </div>
                 <div className="field half">
                   <label className="lang-tag">ES</label>
-                  {renderInput(p.type, p.es, form[p.es], handleChange, {}, refOptions)}
+                  {renderInput(p.type, p.es, form[p.es], handleChange, {}, refOptions, t)}
                 </div>
               </div>
             </div>
           ))}
 
           {config.singles.map((s) => (
-            <div key={s.name} className={`field ${s.type === "textarea" ? "full" : ""}`}>
-              <label htmlFor={s.name}>{s.label}</label>
-              {renderInput(s.type, s.name, form[s.name], handleChange, s, refOptions)}
+            <div key={s.name} className={`field ${s.type === "textarea" || s.type === "map" ? "full" : ""}`}>
+              <label htmlFor={s.name}>{t(s.label)}</label>
+              {renderInput(s.type, s.name, form[s.name], handleChange, s, refOptions, t)}
             </div>
           ))}
 
           <div className="full" style={{ display: "flex", gap: 12, alignItems: "center" }}>
             <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? "Saving…" : isEditing ? "Save Changes" : `Add ${config.noun}`}
+              {saving
+                ? t("admin.resource.saving")
+                : isEditing
+                  ? t("admin.resource.saveChanges")
+                  : t("admin.resource.add", { noun: t(config.noun) })}
             </button>
             {error && <p className="form-status error" style={{ margin: 0 }}>{error}</p>}
-            {success && <p className="form-status" style={{ margin: 0 }}>Saved.</p>}
+            {success && <p className="form-status" style={{ margin: 0 }}>{t("admin.resource.saved")}</p>}
           </div>
         </form>
       )}
@@ -153,7 +165,15 @@ export default function ResourceForm() {
 
 const INPUT_TYPES = { datetime: "datetime-local", date: "date", number: "number", url: "url", email: "email" };
 
-function renderInput(type, name, value, onChange, extra = {}, refOptions) {
+function renderInput(type, name, value, onChange, extra = {}, refOptions, t = (k) => k) {
+  if (type === "map") {
+    return (
+      <MapDrawField
+        value={value || null}
+        onChange={(geo) => onChange({ target: { name, value: geo } })}
+      />
+    );
+  }
   if (type === "checkbox") {
     return <input type="checkbox" name={name} checked={Boolean(value)} onChange={onChange} />;
   }
@@ -162,12 +182,14 @@ function renderInput(type, name, value, onChange, extra = {}, refOptions) {
   }
   if (type === "reference") {
     const options = refOptions?.[name] || [];
+    const valueKey = extra.valueField || "id";
+    const labelKey = extra.labelField || "name";
     return (
       <select name={name} value={value} onChange={onChange} required={extra.required}>
-        <option value="">{extra.placeholder || "Select…"}</option>
+        <option value="">{t(extra.placeholder || "Select…")}</option>
         {options.map((opt) => (
-          <option key={opt.id} value={opt.id}>
-            {opt.name}
+          <option key={opt.id} value={opt[valueKey]}>
+            {opt[labelKey] ?? opt.status ?? opt.name ?? opt.id}
           </option>
         ))}
       </select>
@@ -178,7 +200,7 @@ function renderInput(type, name, value, onChange, extra = {}, refOptions) {
       <select name={name} value={value} onChange={onChange}>
         {extra.options.map(([val, label]) => (
           <option key={val} value={val}>
-            {label}
+            {t(label)}
           </option>
         ))}
       </select>

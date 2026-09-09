@@ -10,6 +10,18 @@ adminApi.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Token ${token}`;
   }
+  if (!config.params) {
+    config.params = {};
+  }
+  // Localized display values (status_display, country_name, …) follow the
+  // active language, shared with the public site via the usar_language key.
+  if (!config.params.lang) {
+    try {
+      config.params.lang = localStorage.getItem("usar_language") || "en";
+    } catch {
+      config.params.lang = "en";
+    }
+  }
   return config;
 });
 
@@ -37,6 +49,13 @@ export const adminEndpoints = {
   createMember: (payload) => adminApi.post("/members/", payload).then((r) => r.data),
   updateMember: (id, payload) => adminApi.patch(`/members/${id}/`, payload).then((r) => r.data),
   deleteMember: (id) => adminApi.delete(`/members/${id}/`),
+  setMemberPassword: (id, newPassword, confirmPassword) =>
+    adminApi
+      .post(`/members/${id}/set_password/`, {
+        new_password: newPassword,
+        confirm_password: confirmPassword,
+      })
+      .then((r) => r.data),
 
   teamRoles: () => adminApi.get("/team-roles/").then((r) => r.data.results ?? r.data),
   hierarchies: () => adminApi.get("/hierarchies/").then((r) => r.data.results ?? r.data),
@@ -92,4 +111,10 @@ export const adminEndpoints = {
   partners: makeResource("/partners/"),
   fundingNeeds: makeResource("/funding-needs/"),
   sponsorshipTiers: makeResource("/sponsorship-tiers/"),
+
+  // Bilingual lookup tables (member/deployment statuses, blood types, capability categories).
+  memberStatuses: makeResource("/member-statuses/"),
+  bloodTypes: makeResource("/blood-types/"),
+  deploymentStatuses: makeResource("/deployment-statuses/"),
+  capabilityCategories: makeResource("/capability-categories/"),
 };

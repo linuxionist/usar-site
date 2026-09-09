@@ -3,8 +3,12 @@ import { useParams, Link } from "react-router-dom";
 import AdminLayout from "../components/AdminLayout.jsx";
 import DocumentGroup from "../components/DocumentGroup.jsx";
 import { adminEndpoints } from "../api.js";
+import { useLanguage } from "../../i18n/LanguageContext.jsx";
+import { adminT } from "../../i18n/adminTranslations.js";
 
 export default function ApplicantsDetail() {
+  const { lang } = useLanguage();
+  const t = (key, vars) => adminT(lang, key, vars);
   const { id } = useParams();
 
   const [app, setApp] = useState(null);
@@ -16,8 +20,9 @@ export default function ApplicantsDetail() {
     adminEndpoints.volunteerApplications
       .get(id)
       .then(setApp)
-      .catch(() => setError("Unable to load this application."))
+      .catch(() => setError(t("admin.applicants.detail.loadError")))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   async function runAction(action, msg) {
@@ -39,7 +44,7 @@ export default function ApplicantsDetail() {
         approve
           ? adminEndpoints.approveDocument(id, doc.id)
           : adminEndpoints.rejectDocument(id, doc.id),
-      "Unable to update document."
+      t("admin.applicants.detail.docError")
     );
   }
 
@@ -49,14 +54,14 @@ export default function ApplicantsDetail() {
         approve
           ? adminEndpoints.approveMedical(id, doc.id)
           : adminEndpoints.rejectMedical(id, doc.id),
-      "Unable to update medical document."
+      t("admin.applicants.detail.medicalError")
     );
   }
 
   if (loading) {
     return (
       <AdminLayout>
-        <p className="loading-note">Loading…</p>
+        <p className="loading-note">{t("admin.resource.loading")}</p>
       </AdminLayout>
     );
   }
@@ -65,7 +70,7 @@ export default function ApplicantsDetail() {
     return (
       <AdminLayout>
         <p className="empty-note">{error}</p>
-        <Link to="/admin/archive" className="link-more">← Back to applicants</Link>
+        <Link to="/admin/archive" className="link-more">{t("admin.applicants.detail.back")}</Link>
       </AdminLayout>
     );
   }
@@ -80,7 +85,7 @@ export default function ApplicantsDetail() {
           )}
         </h2>
         <Link to="/admin/archive" className="link-more">
-          ← Back to applicants
+          {t("admin.applicants.detail.back")}
         </Link>
       </div>
 
@@ -89,31 +94,31 @@ export default function ApplicantsDetail() {
       <div className="admin-detail">
         <div className="admin-detail-grid">
           <div className="field">
-            <label>Email</label>
+            <label>{t("admin.members.email")}</label>
             <p>{app.email}</p>
           </div>
           <div className="field">
-            <label>Phone</label>
+            <label>{t("admin.members.phone")}</label>
             <p>{app.phone || "—"}</p>
           </div>
           <div className="field">
-            <label>ID number</label>
+            <label>{t("admin.members.idNumber")}</label>
             <p>{app.id_number || "—"}</p>
           </div>
           <div className="field">
-            <label>Country</label>
+            <label>{t("admin.members.country")}</label>
             <p>{app.country_name || "—"}</p>
           </div>
           <div className="field">
-            <label>Interested role</label>
-            <p>{app.role_interest_title || "Not specified"}</p>
+            <label>{t("admin.applicants.role")}</label>
+            <p>{app.role_interest_title || t("admin.applicants.notSpecified")}</p>
           </div>
           <div className="field">
-            <label>Submitted</label>
+            <label>{t("admin.applicants.submitted")}</label>
             <p>{new Date(app.submitted_at).toLocaleString()}</p>
           </div>
           <div className="field full">
-            <label>Message</label>
+            <label>{t("admin.applicants.detail.message")}</label>
             <p>{app.message || "—"}</p>
           </div>
         </div>
@@ -126,11 +131,11 @@ export default function ApplicantsDetail() {
               onClick={() =>
                 runAction(
                   adminEndpoints.advanceApplicationPhase,
-                  "Unable to advance phase."
+                  t("admin.applicants.detail.advanceError")
                 )
               }
             >
-              Advance phase
+              {t("admin.applicants.detail.advance")}
             </button>
           )}
           {app.pipeline_phase === "board" && app.pipeline_phase !== "active" && (
@@ -138,10 +143,10 @@ export default function ApplicantsDetail() {
               className="btn btn-primary"
               disabled={saving}
               onClick={() =>
-                runAction(adminEndpoints.activateApplication, "Unable to activate.")
+                runAction(adminEndpoints.activateApplication, t("admin.applicants.detail.activateError"))
               }
             >
-              Approve → Active
+              {t("admin.applicants.detail.approve")}
             </button>
           )}
           {!app.is_rejected && app.pipeline_phase !== "active" && (
@@ -149,30 +154,30 @@ export default function ApplicantsDetail() {
               className="btn btn-outline"
               disabled={saving}
               onClick={() =>
-                window.confirm(`Reject application from ${app.full_name}?`) &&
-                runAction(adminEndpoints.rejectApplication, "Unable to reject.")
+                window.confirm(t("admin.applicants.detail.rejectConfirm", { name: app.full_name })) &&
+                runAction(adminEndpoints.rejectApplication, t("admin.applicants.detail.rejectError"))
               }
             >
-              Reject
+              {t("admin.applicants.detail.reject")}
             </button>
           )}
         </div>
 
         {(app.documents?.length > 0 || app.medical_documents?.length > 0) && (
           <div className="kanban-panel-section">
-            <h4>Documents</h4>
+            <h4>{t("admin.applicants.detail.documents")}</h4>
             <DocumentGroup
-              label="Documents"
+              label={t("admin.applicants.detail.documents")}
               items={(app.documents || []).filter((d) => d.kind === "document")}
               decide={(d, ok) => decideDocument(d, ok)}
             />
             <DocumentGroup
-              label="Certifications"
+              label={t("admin.applicants.detail.certifications")}
               items={(app.documents || []).filter((d) => d.kind === "certification")}
               decide={(d, ok) => decideDocument(d, ok)}
             />
             <DocumentGroup
-              label="Medical"
+              label={t("admin.applicants.detail.medical")}
               items={app.medical_documents || []}
               decide={(d, ok) => decideMedical(d, ok)}
             />

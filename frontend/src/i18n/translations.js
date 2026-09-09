@@ -3,6 +3,8 @@ export const translations = {
     "lang.name": "English",
 
     // Header
+    "brand.mark": "Specialized Search & Rescue Group",
+    "brand.sub": "Urban Search & Rescue",
     "nav.about": "About",
     "nav.capabilities": "Capabilities",
     "nav.deployments": "Deployments",
@@ -15,7 +17,10 @@ export const translations = {
     "cta.join": "Join the Team",
     "cta.signin": "Sign in",
     "cta.admin": "Admin",
+    "cta.portal": "Portal",
     "cta.signout": "Sign out",
+    "lang.switch.en": "Switch to English",
+    "lang.switch.es": "Switch to Spanish",
 
     // Footer
     "footer.description":
@@ -37,7 +42,7 @@ export const translations = {
     "home.hero.eyebrow": "Urban Search & Rescue",
     "home.hero.title": "Specialized technical rescue when seconds count.",
     "home.hero.lede":
-      "Ridgeline Task Force is a FEMA-aligned volunteer team providing structural collapse, canine search, and technical rescue response to our region and mutual-aid partners nationwide.",
+      "Specialized Search & Rescue Group is volunteer team providing structural collapse, canine search, and technical rescue response to our region and mutual-aid partners nationwide.",
     "home.hero.join": "Join the Team",
     "home.hero.capabilities": "See Our Capabilities",
     "home.status.title": "CURRENT STATUS",
@@ -181,6 +186,8 @@ export const translations = {
     "lang.name": "Es",
 
     // Header
+    "brand.mark": "Grupo Especializado de Búsqueda y Salvamento",
+    "brand.sub": "Búsqueda y Rescate Urbano",
     "nav.about": "Nosotros",
     "nav.capabilities": "Capacidades",
     "nav.deployments": "Despliegues",
@@ -194,7 +201,10 @@ export const translations = {
     "cta.join": "Únete al Equipo",
     "cta.signin": "Iniciar sesión",
     "cta.admin": "Administración",
+    "cta.portal": "Portal",
     "cta.signout": "Cerrar sesión",
+    "lang.switch.en": "Cambiar a inglés",
+    "lang.switch.es": "Cambiar a español",
 
     // Footer
     "footer.description":
@@ -217,7 +227,7 @@ export const translations = {
     "home.hero.eyebrow": "Búsqueda y Rescate Urbano",
     "home.hero.title": "Rescate técnico especializado cuando cada segundo cuenta.",
     "home.hero.lede":
-      "Ridgeline Task Force es un equipo voluntario alineado con FEMA que brinda respuesta de colapso estructural, búsqueda canina y rescate técnico a nuestra región y a socios de ayuda mutua en todo el país.",
+      "El Grupo Especializado de Búsqueda y Salvamento es un equipo voluntario que brinda respuesta de colapso estructural, búsqueda canina y rescate técnico a nuestra región y a socios de ayuda mutua en todo el país.",
     "home.hero.join": "Únete al Equipo",
     "home.hero.capabilities": "Ver Nuestras Capacidades",
     "home.status.title": "ESTADO ACTUAL",

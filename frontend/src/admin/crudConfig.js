@@ -1,20 +1,9 @@
 // Field type -> input type mapping applied by ResourceForm.
 export const CHOICES = {
-  capabilityCategory: [
-    ["heavy_technical", "Heavy/Technical Rescue"],
-    ["k9", "Canine (K9) Unit"],
-    ["technical_search", "Technical Search"],
-    ["medical", "Medical Task Force"],
-    ["hazmat", "Hazardous Materials & Technical Support"],
-  ],
   newsCategory: [
     ["news", "Team Update"],
     ["dispatch", "Dispatch Log"],
     ["exercise", "Training Exercise"],
-  ],
-  deploymentStatus: [
-    ["active", "Active Operation"],
-    ["completed", "Completed"],
   ],
   partnerType: [
     ["agency", "Sponsoring Agency"],
@@ -83,8 +72,16 @@ export const CRUD_CONFIG = {
       pair("Description", "description", "description_es", "textarea"),
     ],
     singles: [
-      choice("category", "Category", CHOICES.capabilityCategory),
-      single("icon", "Icon key", "text", { help: "e.g. 'shoring'" }),
+      {
+        type: "reference",
+        name: "category",
+        label: "Category",
+        required: true,
+        endpointKey: "capabilityCategories",
+        valueField: "status",
+        labelField: "status",
+        placeholder: "Select category…",
+      },
       single("order", "Order", "number"),
     ],
   },
@@ -115,10 +112,20 @@ export const CRUD_CONFIG = {
       pair("Summary", "summary", "summary_es", "textarea"),
     ],
     singles: [
-      choice("status", "Status", CHOICES.deploymentStatus),
+      {
+        type: "reference",
+        name: "status",
+        label: "Status",
+        required: true,
+        endpointKey: "deploymentStatuses",
+        valueField: "status",
+        labelField: "status",
+        placeholder: "Select status…",
+      },
       single("start_date", "Start date", "date"),
       single("end_date", "End date", "date"),
       single("is_public", "Public", "checkbox", { help: "Uncheck to withhold per safety protocol" }),
+      { type: "map", name: "map_area", label: "Map area (GeoJSON)" },
     ],
   },
   trainingExercises: {
@@ -234,6 +241,38 @@ export const CRUD_CONFIG = {
     ],
     singles: [single("annual_amount", "Annual amount", "number"), single("order", "Order", "number")],
   },
+  memberStatuses: {
+    noun: "Member Status",
+    title: "Member Statuses",
+    endpointKey: "memberStatuses",
+    listColumns: [{ key: "status" }, { key: "note" }],
+    pairs: [pair("Label", "note", "note_es")],
+    singles: [single("status", "Status key", "text", { required: true, help: "Unique key used in code, e.g. 'active'" })],
+  },
+  bloodTypes: {
+    noun: "Blood Type",
+    title: "Blood Types",
+    endpointKey: "bloodTypes",
+    listColumns: [{ key: "status" }, { key: "note" }],
+    pairs: [pair("Label", "note", "note_es")],
+    singles: [single("status", "Blood type key", "text", { required: true, help: "e.g. 'O+', 'A-'" })],
+  },
+  deploymentStatuses: {
+    noun: "Deployment Status",
+    title: "Deployment Statuses",
+    endpointKey: "deploymentStatuses",
+    listColumns: [{ key: "status" }, { key: "note" }],
+    pairs: [pair("Label", "note", "note_es")],
+    singles: [single("status", "Status key", "text", { required: true, help: "Unique key used in code, e.g. 'active'" })],
+  },
+  capabilityCategories: {
+    noun: "Capability Category",
+    title: "Capability Categories",
+    endpointKey: "capabilityCategories",
+    listColumns: [{ key: "status" }, { key: "note" }],
+    pairs: [pair("Label", "note", "note_es")],
+    singles: [single("status", "Category key", "text", { required: true, help: "Unique key used in code, e.g. 'heavy_technical'" })],
+  },
 };
 
 export const RESOURCE_LIST = [
@@ -247,6 +286,11 @@ export const RESOURCE_LIST = [
   ["partners", "Partners"],
   ["funding", "Funding Needs"],
   ["sponsorship", "Sponsorship Tiers"],
+  ["lookups", "Lookup Tables", "heading"],
+  ["memberStatuses", "Member Statuses"],
+  ["bloodTypes", "Blood Types"],
+  ["deploymentStatuses", "Deployment Statuses"],
+  ["capabilityCategories", "Capability Categories"],
 ];
 
 // Roster sub-navigation: resources that live under the "Members" group.

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../admin/AuthContext.jsx";
 import { useLanguage } from "../i18n/LanguageContext.jsx";
+import { USFlag, SpainFlag } from "./flags.jsx";
 
 function UserMenu({ user, logout, t }) {
   const [open, setOpen] = useState(false);
@@ -35,12 +36,12 @@ function UserMenu({ user, logout, t }) {
       {open && (
         <div className="header-user-menu" role="menu">
           <NavLink
-            to="/admin/members"
+            to={user.is_staff ? "/admin/members" : "/member/profile"}
             role="menuitem"
             onClick={close}
             className={({ isActive }) => (isActive ? "active" : undefined)}
           >
-            {t("cta.admin")}
+            {user.is_staff ? t("cta.admin") : t("cta.portal")}
           </NavLink>
           <button type="button" role="menuitem" onClick={() => { close(); logout(); }}>
             {t("cta.signout")}
@@ -54,6 +55,12 @@ function UserMenu({ user, logout, t }) {
 export default function Header() {
   const { user, logout } = useAuth();
   const { lang, setLang, t } = useLanguage();
+  const location = useLocation();
+  const [navOpen, setNavOpen] = useState(false);
+
+  useEffect(() => {
+    setNavOpen(false);
+  }, [location.pathname]);
 
   const NAV_LINKS = [
     { to: "/about", label: t("nav.about") },
@@ -75,38 +82,75 @@ export default function Header() {
       <header className="site-header">
         <div className="container">
           <NavLink to="/" className="brand">
-            <span className="brand-mark">Ridgeline Task Force</span>
-            <span className="brand-sub">Urban Search &amp; Rescue</span>
+            <img src="/images/USAR-LOGO.png" alt={`${t("brand.mark")} logo`} className="brand-logo" />
+            <span className="brand-text">
+              <span className="brand-mark">{t("brand.mark")}</span>
+              <span className="brand-sub">{t("brand.sub")}</span>
+            </span>
           </NavLink>
-          <nav className="main-nav" aria-label="Primary">
+          <nav className={`main-nav${navOpen ? " open" : ""}`} aria-label="Primary">
             {NAV_LINKS.map((link) => (
               <NavLink
                 key={link.to}
                 to={link.to}
+                onClick={() => setNavOpen(false)}
                 className={({ isActive }) => (isActive ? "active" : undefined)}
               >
                 {link.label}
               </NavLink>
             ))}
+            <div className="nav-mobile-extra">
+              {user ? (
+                <button
+                  type="button"
+                  className="nav-mobile-link"
+                  onClick={() => {
+                    setNavOpen(false);
+                    logout();
+                  }}
+                >
+                  {t("cta.signout")} ({user.username})
+                </button>
+              ) : (
+                <NavLink
+                  to="/admin/login"
+                  onClick={() => setNavOpen(false)}
+                  className={({ isActive }) => (isActive ? "active" : undefined)}
+                >
+                  {t("cta.signin")}
+                </NavLink>
+              )}
+            </div>
           </nav>
           <div className="header-ctas">
-            <button type="button" className="lang-toggle" onClick={() => setLang(lang === "en" ? "es" : "en")}>
-              {lang === "en" ? "ES" : "EN"}
+            <button
+              type="button"
+              className="lang-toggle"
+              aria-label={lang === "en" ? t("lang.switch.es") : t("lang.switch.en")}
+              title={lang === "en" ? t("lang.switch.es") : t("lang.switch.en")}
+              onClick={() => setLang(lang === "en" ? "es" : "en")}
+            >
+              {lang === "en" ? <USFlag className="lang-flag" /> : <SpainFlag className="lang-flag" />}
             </button>
-            <NavLink to="/donate" className="btn btn-outline">
-              {t("cta.donate")}
-            </NavLink>
-            {user && user.is_staff ? (
+            {user ? (
               <UserMenu user={user} logout={logout} t={t} />
             ) : (
-              <NavLink to="/admin/login" className="btn btn-ghost">
+              <NavLink to="/admin/login" className="btn btn-ghost desktop-signin">
                 {t("cta.signin")}
               </NavLink>
             )}
-            <NavLink to="/join" className="btn btn-primary">
-              {t("cta.join")}
-            </NavLink>
           </div>
+          <button
+            type="button"
+            className={`nav-toggle${navOpen ? " open" : ""}`}
+            aria-expanded={navOpen}
+            aria-label={navOpen ? "Close navigation menu" : "Open navigation menu"}
+            onClick={() => setNavOpen((v) => !v)}
+          >
+            <span className="bar" />
+            <span className="bar" />
+            <span className="bar" />
+          </button>
         </div>
       </header>
     </>
